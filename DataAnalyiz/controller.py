@@ -3,8 +3,10 @@
 import os
 import pathlib
 import re
+from datetime import datetime
 from model import dirFunc
 from functools import wraps
+from shutil import copyfile
 
 
 class analizyFun:
@@ -12,62 +14,96 @@ class analizyFun:
         self.fileFolder = list()
         self.parseResult = list()
         self.fileDic = dict()
-        self.rawpath = args[0]
+        self.rawpath = dirFunc().openRawdir()[1]
         self.regex = [r'Test Result.*', r'MAC Address.*',
                       r'^Start\sTime.*', r'Station.\s.*?\s', r'dut_id.*']
         self.regexDic = {'TestResult': r'Test Result.*',
-                         'MAC': r'MAC Address.*',
+                         'MAC': r'MAC.*',
                          'StartTime': r'Start\sTime.*(................:.......)',
                          'StationID': r'Station.\s.*?\s',
-                         'DutID': r'dut_id.*'}
+                         'DutID': r'dut_id.*|station_ip.*',
+                         'FailReason': r'ErrorCode.*|Fail.*|.*-\sfail'}
 
     def fileCollect(self):
         dirList = dirFunc().walkDir(self.rawpath)
-        for dir in dirList:
-            dirPath = self.rawpath + '\\' + dir
+        if dirList[1]:
+            for dir in dirList[1]:
+                dirPath = self.rawpath + '\\' + dir
+                fileList = next(os.walk(dirPath))[-1]
+                self.fileDic.update({dir: fileList})
+        else:
+            dir = self.rawpath.split('/')[-1]
+            dirPath = self.rawpath
             fileList = next(os.walk(dirPath))[-1]
             self.fileDic.update({dir: fileList})
-            # self.fileFolder.append(fileList)
         return self.fileDic
 
+    def logRead(func):
+        @wraps(func)
+        def walk_read(self):
+            anaDir = dirFunc().createAnalizydir(list(self.fileDic.keys()))[1]
+            # andDir format: (mainpath, subfolder, file)
+            for station in self.fileDic:
+                for log in self.fileDic[station]:
+                    if dirFunc().walkDir(self.rawpath)[1]:
+                        logPath = self.rawpath + '\\' + station + '\\' + log
+                    else:
+                        logPath = self.rawpath + '\\' + log
+                    with open(logPath, 'r') as f:
+                        content = f.read()
+                    f.close()
+                    result = func(self, content)
+                    # result format: [result,mac,start_time,station,dut_id]
+                    if not result[0]:
+                        copyfile(logPath, '{}/{}/Fail/{}'.format(anaDir[0],
+                                                                 station,
+                                                                 log))
+                    else:
+                        copyfile(logPath, '{}/{}/PASS/{}'.format(anaDir[0],
+                                                                 station,
+                                                                 log))
+                    self.parseResult.append(result)
+            return self.parseResult
+        return walk_read
+
+    @logRead
     def logParse(self, data):
+        logResult = list()
         for regex in self.regexDic.keys():
-            pattern = re.compile(self.regexDic[regex], re.MULTILINE | re.IGNORECASE)
+            pattern = re.compile(self.regexDic[regex], re.MULTILINE)
+            # method: re.compile(regex, flag = re.MULTILINE | re.IGNORECASE)
             parsing = (pattern.findall(data))
             print ('parsing {}: {}'.format(regex, parsing))
             if parsing:
-                if regex is 'StartTime':
-                    parse = parsing[0]
+                parsing[0] = parsing[0].replace('=', ':')
+                if 'time' in regex.lower():
+                    parse = datetime.strptime(parsing[0],
+                                              "%a %b %d %H:%M:%S %Y"
+                                              ).isoformat()
+                    # parse format -> ex: '2018-08-14T23:02:27'
+                elif 'reason' in regex.lower():
+                    if logResult[0] == 1:
+                        parse = 'NONE'
+                    else:
+                        parse = parsing[-1]
                 else:
-                    parse = parsing[0].split(':')[-1].split('\n')[0].strip()
-                print (parse)
+                    parse = parsing[0].split(':', 1)[-1].split('\n')[0].strip()
+                    if 'PASS' in parse.upper():
+                        parse = 1
+                    elif 'FAIL' in parse.upper():
+                        parse = 0
             else:
                 parse = 'NONE'
-            self.parseResult.append(parse)
-        return self.parseResult
-
-    def fileAnalizy(self, files):
-        anaDir = dirFunc().createAnalizydir(list(files.keys()))[1][0]
-        print (anaDir)
-        for station in files:
-            for log in files[station]:
-                logPath = self.rawpath + '\\' + station + '\\' + log
-                with open(logPath, 'r') as f:
-                    content = f.read()
-                f.close()
-                a = self.logParse(content)
-        print (a)
-        print (len(a))
-
-
+            logResult.append(parse)
+        return logResult
 
 
 def main():
-    dirpath = dirFunc().openRawdir()[1]
-    af = analizyFun(dirpath)
-    fileDic = af.fileCollect()
-    af.fileAnalizy(fileDic)
-
+    af = analizyFun()
+    af.fileCollect()
+    result = af.logParse()
+    print (result)
+    print (len(result))
 
 
 if __name__ == '__main__':

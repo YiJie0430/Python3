@@ -21,14 +21,13 @@ class dirFunc:
             return(0, 'no select dir')
 
     def walkDir(self, dirPath):
-        print (dirPath)
-        dirList = next(os.walk(dirPath))[1]
+        dirList = next(os.walk(dirPath))
         return dirList
 
     def createAnalizydir(self, dirList):
         rootpath = os.getcwd() + '\\' + 'analizyDir'
+        shutil.rmtree(rootpath, ignore_errors=True)
         pathlib.Path(rootpath).mkdir(exist_ok=True)
-        # shutil.rmtree(path, ignore_errors=True)
         for dir in dirList:
             subpath = rootpath + '\\' + dir
             pathlib.Path(subpath).mkdir(exist_ok=True)
