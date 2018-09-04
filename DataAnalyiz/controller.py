@@ -3,10 +3,12 @@
 import os
 import pathlib
 import re
+from view import progressBar
 from datetime import datetime
 from model import dirFunc
 from functools import wraps
 from shutil import copyfile
+from math import trunc
 
 
 class analizyFun:
@@ -14,32 +16,38 @@ class analizyFun:
         self.fileFolder = list()
         self.parseResult = list()
         self.fileDic = dict()
+        self.fileCunt = int()
         self.rawpath = dirFunc().openRawdir()[1]
         self.regex = [r'Test Result.*', r'MAC Address.*',
                       r'^Start\sTime.*', r'Station.\s.*?\s', r'dut_id.*']
         self.regexDic = {'TestResult': r'Test Result.*',
                          'MAC': r'MAC.*',
                          'StartTime': r'Start\sTime.*(................:.......)',
+                         'Total': r'otal\s.*',
                          'StationID': r'Station.\s.*?\s',
                          'DutID': r'dut_id.*|station_ip.*',
-                         'FailReason': r'ErrorCode.*|Fail.*|.*-\sfail'}
+                         'FailReason': r'ErrorCode.*\s?.*|Fail.*|.*-\sfail|.*FAIL..*|failed.*'}
 
     def fileCollect(self):
+        fileCunt = int()
         dirList = dirFunc().walkDir(self.rawpath)
         if dirList[1]:
             for dir in dirList[1]:
                 dirPath = self.rawpath + '\\' + dir
                 fileList = next(os.walk(dirPath))[-1]
                 self.fileDic.update({dir: fileList})
+                self.fileCunt += len(fileList)
         else:
             dir = self.rawpath.split('/')[-1]
             dirPath = self.rawpath
             fileList = next(os.walk(dirPath))[-1]
             self.fileDic.update({dir: fileList})
-        return self.fileDic
+            self.fileCunt += len(fileList)
+        return self.fileCunt
 
     def logRead(func):
         @wraps(func)
+        @progressBar
         def walk_read(self):
             anaDir = dirFunc().createAnalizydir(list(self.fileDic.keys()))[1]
             # andDir format: (mainpath, subfolder, file)
@@ -73,7 +81,7 @@ class analizyFun:
             pattern = re.compile(self.regexDic[regex], re.MULTILINE)
             # method: re.compile(regex, flag = re.MULTILINE | re.IGNORECASE)
             parsing = (pattern.findall(data))
-            print ('parsing {}: {}'.format(regex, parsing))
+            # print ('parsing {}: {}'.format(regex, parsing))
             if parsing:
                 parsing[0] = parsing[0].replace('=', ':')
                 if 'time' in regex.lower():
@@ -85,7 +93,7 @@ class analizyFun:
                     if logResult[0] == 1:
                         parse = 'NONE'
                     else:
-                        parse = parsing[-1]
+                        parse = re.split(r'\nEnd\sTime', parsing[-1])[0]
                 else:
                     parse = parsing[0].split(':', 1)[-1].split('\n')[0].strip()
                     if 'PASS' in parse.upper():
@@ -102,7 +110,9 @@ def main():
     af = analizyFun()
     af.fileCollect()
     result = af.logParse()
-    print (result)
+    for i in result:
+        if not i[0]:
+            print (i)
     print (len(result))
 
 
