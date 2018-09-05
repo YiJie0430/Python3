@@ -5,10 +5,10 @@ import sys
 import time
 import tkinter as tk
 from tkinter import ttk
-from math import trunc
 from functools import wraps
 from controller import analizyFun
 from model import dirFunc
+
 
 class barStatus(tk.Tk):
     def __init__(self, *args, **kwargs):
@@ -37,12 +37,11 @@ class barStatus(tk.Tk):
         self.progress.pack()
 
     def consume(self, *args):
-        #self.progress['value'] = args[0]
+        # self.progress['value'] = args[0]
         self.progress.step()
         self.style.configure('text.Horizontal.TProgressbar',
-                             text='{:g} %'.format((self.variable.get() / self.max) * 100))  # update label
+                             text='{:0.1f} %'.format((self.variable.get() / self.max) * 100))  # update label
         self.progress.update()
-
 
     def update(self, *args):
         if self.variable.get() >= self.max:
