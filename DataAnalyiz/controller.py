@@ -3,12 +3,10 @@
 import os
 import pathlib
 import re
-from view import progressBar
 from datetime import datetime
 from model import dirFunc
 from functools import wraps
 from shutil import copyfile
-from math import trunc
 
 
 class analizyFun:
@@ -47,40 +45,26 @@ class analizyFun:
 
     def logRead(func):
         @wraps(func)
-        @progressBar
-        def walk_read(self):
-            anaDir = dirFunc().createAnalizydir(list(self.fileDic.keys()))[1]
-            # andDir format: (mainpath, subfolder, file)
-            for station in self.fileDic:
-                for log in self.fileDic[station]:
-                    if dirFunc().walkDir(self.rawpath)[1]:
-                        logPath = self.rawpath + '\\' + station + '\\' + log
-                    else:
-                        logPath = self.rawpath + '\\' + log
-                    with open(logPath, 'r') as f:
-                        content = f.read()
-                    f.close()
-                    result = func(self, content)
-                    # result format: [result,mac,start_time,station,dut_id]
-                    if not result[0]:
-                        copyfile(logPath, '{}/{}/Fail/{}'.format(anaDir[0],
-                                                                 station,
-                                                                 log))
-                    else:
-                        copyfile(logPath, '{}/{}/PASS/{}'.format(anaDir[0],
-                                                                 station,
-                                                                 log))
-                    self.parseResult.append(result)
-            return self.parseResult
+        def walk_read(*args):
+            result = func(args[0], args[1])
+            # result format: [result,mac,start_time,total_time,station,dut_id,fail_reason]
+            if not result[0]:
+                copyfile('{}'.format(args[2]),
+                         '{}/{}/Fail/{}'.format(args[3][0], args[4], args[5]))
+            else:
+                copyfile('{}'.format(args[2]),
+                         '{}/{}/PASS/{}'.format(args[3][0], args[4], args[5]))
+            args[0].parseResult.append(result)
+            return args[0].parseResult
         return walk_read
 
     @logRead
-    def logParse(self, data):
+    def logParse(self, *args):
         logResult = list()
         for regex in self.regexDic.keys():
             pattern = re.compile(self.regexDic[regex], re.MULTILINE)
             # method: re.compile(regex, flag = re.MULTILINE | re.IGNORECASE)
-            parsing = (pattern.findall(data))
+            parsing = (pattern.findall(args[0]))
             # print ('parsing {}: {}'.format(regex, parsing))
             if parsing:
                 parsing[0] = parsing[0].replace('=', ':')
@@ -109,7 +93,19 @@ class analizyFun:
 def main():
     af = analizyFun()
     af.fileCollect()
-    result = af.logParse()
+    anaDir = dirFunc().createAnalizydir(list(af.fileDic.keys()))[1]
+    # andDir format: (mainpath, subfolder, file)
+    for station in af.fileDic:
+        for log in af.fileDic[station]:
+            if dirFunc().walkDir(af.rawpath)[1]:
+                logPath = af.rawpath + '\\' + station + '\\' + log
+            else:
+                logPath = af.rawpath + '\\' + log
+            with open(logPath, 'r') as f:
+                content = f.read()
+            f.close()
+            result = af.logParse(content, logPath, anaDir, station, log)
+
     for i in result:
         if not i[0]:
             print (i)

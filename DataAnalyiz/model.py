@@ -52,7 +52,8 @@ def main():
     df = dirFunc()
     a = df.openRawdir()
     a = df.walkDir(a[1])
-    a = df.createAnalizydir(a)
+    print (a)
+    a = df.createAnalizydir(a[1])
     print (a)
 
 
