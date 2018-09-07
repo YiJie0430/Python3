@@ -7,9 +7,14 @@ import tkinter as tk
 from tkinter import ttk
 from functools import wraps
 from controller import analizyFun
+from controller import cutepandas
 from model import dirFunc
 
+'''Author: Y.J. Wang @2018.09.01
+Descrtiption:
+visualize module'''
 
+# class for the progress bar
 class barStatus(tk.Tk):
     def __init__(self, *args, **kwargs):
         tk.Tk.__init__(self)
@@ -52,14 +57,14 @@ class barStatus(tk.Tk):
     def clear(self):
         self.destroy()
 
-
+# decoractor: display the processing progress
 def progressBar(cunt):
     def _BAR(func):
         @wraps(func)
         def progress(analizyFun):
             bar = barStatus(analizyFun.fileCollect())
             anaDir = dirFunc().createAnalizydir(list(analizyFun.fileDic.keys()))[1]
-            # andDir format: (mainpath, subfolder, file)
+            # andDir format: (mainpath, [subfolder], [file])
             for station in analizyFun.fileDic:
                 for log in analizyFun.fileDic[station]:
                     if dirFunc().walkDir(analizyFun.rawpath)[1]:
@@ -70,6 +75,9 @@ def progressBar(cunt):
                         content = f.read()
                     f.close()
                     parsing = func(analizyFun, content, logPath, anaDir, station, log)
+                    '''callback function: logParse()
+                       result list: [result, station, log name, script version, mac,
+                                    start_time, total_time, station id, dut id, fail_reason]'''
                     bar.update()
             return parsing
         return progress
@@ -83,10 +91,14 @@ def startAnalizy(*args):
 
 def main():
     result = startAnalizy(analizyFun())
-    for i in result:
-        if not i[0]:
-            print (i)
-    print (len(result))
+    for x in result:
+        if not x[0]:
+            print (x)
+    pd_ = cutepandas()
+    data = pd_.toDataframd(result)
+    group1 = data.groupby('Fail Reason')
+    print (group1.size())
+
 
 
 if __name__ == '__main__':

@@ -1,14 +1,18 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 import os
-import pathlib
 import re
+import pandas as pd
 from datetime import datetime
 from model import dirFunc
 from functools import wraps
 from shutil import copyfile
 
+'''Author: Y.J. Wang @2018.09.01
+Descrtiption:
+file analizy module'''
 
+# Class for the file analizy
 class analizyFun:
     def __init__(self, *args):
         self.fileFolder = list()
@@ -16,8 +20,13 @@ class analizyFun:
         self.fileDic = dict()
         self.fileCunt = int()
         self.rawpath = dirFunc().openRawdir()[1]
-        self.regex = [r'Test Result.*', r'MAC Address.*',
-                      r'^Start\sTime.*', r'Station.\s.*?\s', r'dut_id.*']
+        self.mainissue = {'MES issue': ['check mes'],
+                          'US Cal. issue': ['freq:', 'freq='],
+                          'DS Cal. issue': ['dscal'],
+                          'Ether issue': ['switch'],
+                          'COM Port issue': ['cli', 'connection'],
+                          'Tftp issue': ['cmcert']}
+        # Regular expression
         self.regexDic = {'TestResult': r'Test Result.*',
                          'ScriptVersion': r'(?<=ersion.)(.*)(?=\s,)',
                          'MAC': r'MAC.*',
@@ -27,9 +36,11 @@ class analizyFun:
                          'DutID': r'dut_id.*|station_ip.*',
                          'FailReason': r'ErrorCode.*\s?.*|Fail.*|.*-\sfail|.*FAIL..*|failed.*|.*\sEnd\sTime'}
 
+    # consume the number of files
     def fileCollect(self):
         fileCunt = int()
         dirList = dirFunc().walkDir(self.rawpath)
+        # dirList format: (folder path, [subfolder], [file])
         if dirList[1]:
             for dir in dirList[1]:
                 dirPath = self.rawpath + '\\' + dir
@@ -44,17 +55,53 @@ class analizyFun:
             self.fileCunt += len(fileList)
         return self.fileCunt
 
+    # catch main fail issue and reason
+    def aiLike(self, *args):
+        # args[0]: Fail reason related parisng string
+        parse = None
+        for idx, string in enumerate(args[0]):
+            if 'Test Result' in string and len(args[0]) == 1:
+                if 'None' in string:
+                    return ['Script traceback', 'NONE']
+                else:
+                    return ['Others', 'NONE']
+            if 'Test Result' in string and len(args[0]) > 1:
+                args[0].pop(idx)
+                continue
+            if 'ErrorCode' in string:
+                parse1 = re.split(r'\nEnd\sTime', string)[0]
+                parse = re.split(r'ErrorCode.*?:', parse1)[-1]
+                for issue in list(self.mainissue.keys()):
+                    for event in self.mainissue[issue]:
+                        if event in parse.lower():
+                            return [issue, parse]
+                return [parse, 'NONE']
+        if not parse:
+            if 'None' in args[0][-1]:
+                return ['Script traceback', 'NONE']
+            else:
+                return [re.split(r'\nEnd\sTime', args[0][-1])[0], 'NONE']
+
+    # decoractor: record the parsing value and copy the log to certain folder
     def logRead(func):
         @wraps(func)
         def walk_read(*args):
-            result = func(args[0], args[1])
-            # result format: [result,mac,start_time,total_time,station,dut_id,fail_reason]
+            '''args[0]: class self obect
+               args[1]: current file content
+               args[2]: current-filepath
+               args[3]: (rootpath, [all-subfolder], [all-file])
+               args[4]: current-subfolder name
+               args[5]: current-file name'''
+            result = func(args[0], args[1], args[4], args[5])
+            '''callback function: logParse()
+               result list: [result, station, log name, script version, mac,
+                            start_time, total_time, station id, dut id, fail_reason]'''
             if not result[0]:
                 copyfile('{}'.format(args[2]),
                          '{}/{}/Fail/{}'.format(args[3][0], args[4], args[5]))
             else:
                 copyfile('{}'.format(args[2]),
-                         '{}/{}/PASS/{}'.format(args[3][0], args[4], args[5]))
+                         '{}/{}/Pass/{}'.format(args[3][0], args[4], args[5]))
             args[0].parseResult.append(result)
             return args[0].parseResult
         return walk_read
@@ -71,6 +118,7 @@ class analizyFun:
             if parsing:
                 parsing[0] = parsing[0].replace('=', ':')
                 if 'time' in regex.lower():
+                    # switch datetime to y-M-D H:M:Sec
                     parse = datetime.strptime(parsing[0],
                                               "%a %b %d %H:%M:%S %Y"
                                               ).isoformat()
@@ -79,26 +127,12 @@ class analizyFun:
                     if logResult[0] == 1:
                         parse = 'NONE'
                     else:
+                        parse = self.aiLike(parsing)
                         try:
-                            for idx, string in enumerate(parsing):
-                                if 'Test Result' in string and len(parsing) == 1:
-                                    parse = 'Others'
-                                    break
-                                if 'Test Result' in string and len(parsing) > 1:
-                                    parsing.pop(idx)
-                                    continue
-                                if 'ErrorCode' in string:
-                                    parse = re.split(r'\nEnd\sTime', string)[0]
-                                    break
-                            if not parse:
-                                if 'None' in parsing[-1]:
-                                    parse = 'Script trace'
-                                else:
-                                    parse = re.split(r'\nEnd\sTime', parsing[-1])[0]
+                            parse = self.aiLike(parsing)
                         except:
+                            parse = 'valueErr'
                             print ('valueError')
-
-
                 else:
                     parse = parsing[0].split(':', 1)[-1].split('\n')[0].strip()
                     if 'PASS' in parse.upper():
@@ -107,8 +141,23 @@ class analizyFun:
                         parse = 0
             else:
                 parse = 'NONE'
-            logResult.append(parse)
+            if type(parse) is list:
+                logResult.extend(parse)
+            else:
+                logResult.append(parse)
+        logResult.insert(1, args[1])
+        logResult.insert(2, args[2])
         return logResult
+
+
+class cutepandas:
+    def __init__(self, *args, **kwargs):
+        self.columns = ['Test Result', 'Station', 'Log Name', 'Script Version',
+                        'MAC', 'Start Time', 'Total Time', 'Station ID',
+                        'Dut ID', 'Fail Reason', 'Sub Reason']
+
+    def toDataframd(self, *args):
+        return pd.DataFrame(args[0], columns=self.columns)
 
 
 def main():
