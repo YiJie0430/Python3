@@ -19,12 +19,13 @@ class analizyFun:
         self.regex = [r'Test Result.*', r'MAC Address.*',
                       r'^Start\sTime.*', r'Station.\s.*?\s', r'dut_id.*']
         self.regexDic = {'TestResult': r'Test Result.*',
+                         'ScriptVersion': r'(?<=ersion.)(.*)(?=\s,)',
                          'MAC': r'MAC.*',
                          'StartTime': r'Start\sTime.*(................:.......)',
                          'Total': r'otal\s.*',
                          'StationID': r'Station.\s.*?\s',
                          'DutID': r'dut_id.*|station_ip.*',
-                         'FailReason': r'ErrorCode.*\s?.*|Fail.*|.*-\sfail|.*FAIL..*|failed.*'}
+                         'FailReason': r'ErrorCode.*\s?.*|Fail.*|.*-\sfail|.*FAIL..*|failed.*|.*\sEnd\sTime'}
 
     def fileCollect(self):
         fileCunt = int()
@@ -62,6 +63,7 @@ class analizyFun:
     def logParse(self, *args):
         logResult = list()
         for regex in self.regexDic.keys():
+            parse = None
             pattern = re.compile(self.regexDic[regex], re.MULTILINE)
             # method: re.compile(regex, flag = re.MULTILINE | re.IGNORECASE)
             parsing = (pattern.findall(args[0]))
@@ -77,7 +79,26 @@ class analizyFun:
                     if logResult[0] == 1:
                         parse = 'NONE'
                     else:
-                        parse = re.split(r'\nEnd\sTime', parsing[-1])[0]
+                        try:
+                            for idx, string in enumerate(parsing):
+                                if 'Test Result' in string and len(parsing) == 1:
+                                    parse = 'Others'
+                                    break
+                                if 'Test Result' in string and len(parsing) > 1:
+                                    parsing.pop(idx)
+                                    continue
+                                if 'ErrorCode' in string:
+                                    parse = re.split(r'\nEnd\sTime', string)[0]
+                                    break
+                            if not parse:
+                                if 'None' in parsing[-1]:
+                                    parse = 'Script trace'
+                                else:
+                                    parse = re.split(r'\nEnd\sTime', parsing[-1])[0]
+                        except:
+                            print ('valueError')
+
+
                 else:
                     parse = parsing[0].split(':', 1)[-1].split('\n')[0].strip()
                     if 'PASS' in parse.upper():
