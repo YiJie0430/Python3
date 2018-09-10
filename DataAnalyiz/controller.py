@@ -20,12 +20,27 @@ class analizyFun:
         self.fileDic = dict()
         self.fileCunt = int()
         self.rawpath = dirFunc().openRawdir()[1]
-        self.mainissue = {'MES issue': ['check mes'],
-                          'US Cal. issue': ['freq:', 'freq='],
-                          'DS Cal. issue': ['dscal'],
-                          'Ether issue': ['switch'],
-                          'COM Port issue': ['cli', 'connection'],
-                          'Tftp issue': ['cmcert']}
+        # classify the fail issue
+        self.issue = {'MES issue': ['check mes', 'get sn'],
+                      'US Cal. issue': ['freq:', 'freq='],
+                      'DS Cal. issue': ['dscal'],
+                      'Ether issue': ['switch'],
+                      'COM Port issue': ['cli', 'connection', '**',
+                                         'return :'],
+                      'Tftp issue': ['cmcert'],
+                      'Online issue': [{'D3.1_OFDM_MER': ['ofdm rxmer'],
+                                        'D3.0_DS_Lock': ['ds channel lock'],
+                                        'D3.0_US_Power': ['us power check'],
+                                        'SNMP Issue': ['query ds frequency',
+                                                       'snmp get'],
+                                        'D3.1_OFDMA_SNR': ['ofdma snr'],
+                                        'D3.0_US_SNR': ['scqam snr']}],
+                      'Booting issue': ['booting port'],
+                      'LED issue': [' led '],
+                      'I2C issue': ['device id'],
+                      'USB issue': ['usb mount', 'mount', 'usb content'],
+                      'Script issue': ['traceback']}
+        self.subissue = {}
         # Regular expression
         self.regexDic = {'TestResult': r'Test Result.*',
                          'ScriptVersion': r'(?<=ersion.)(.*)(?=\s,)',
@@ -62,25 +77,33 @@ class analizyFun:
         for idx, string in enumerate(args[0]):
             if 'Test Result' in string and len(args[0]) == 1:
                 if 'None' in string:
-                    return ['Script traceback', 'NONE']
+                    return ['Script issue', 'no response', string]
                 else:
-                    return ['Others', 'NONE']
-            if 'Test Result' in string and len(args[0]) > 1:
+                    return ['Others', 'NONE', string]
+            elif 'Test Result' in string and len(args[0]) > 1:
                 args[0].pop(idx)
                 continue
-            if 'ErrorCode' in string:
-                parse1 = re.split(r'\nEnd\sTime', string)[0]
-                parse = re.split(r'ErrorCode.*?:', parse1)[-1]
-                for issue in list(self.mainissue.keys()):
-                    for event in self.mainissue[issue]:
-                        if event in parse.lower():
-                            return [issue, parse]
-                return [parse, 'NONE']
+            else:
+                if 'ErrorCode' in string or idx == (len(args) - 1):
+                    parse1 = re.split(r'\nEnd\sTime', string)[0]
+                    parse = re.split(r'ErrorCode.*?:', parse1)[-1]
+                    for mainissue in list(self.issue.keys()):
+                        if type(self.issue[mainissue][0]) is dict:
+                            for subissue in list(self.issue[mainissue][0].keys()):
+                                for event in self.issue[mainissue][0][subissue]:
+                                    if event in parse.lower():
+                                        return [mainissue, subissue, parse]
+                        else:
+                            for event in self.issue[mainissue]:
+                                if event in parse.lower():
+                                    return [mainissue, parse, parse]
+                    # return [parse, parse, parse]
         if not parse:
             if 'None' in args[0][-1]:
-                return ['Script traceback', 'NONE']
-            else:
-                return [re.split(r'\nEnd\sTime', args[0][-1])[0], 'NONE']
+                return ['Script issue', 'no response', 'NONE']
+            #else:
+                #return [re.split(r'\nEnd\sTime', args[0][-1])[0], 'NONE']
+
 
     # decoractor: record the parsing value and copy the log to certain folder
     def logRead(func):
@@ -154,7 +177,7 @@ class cutepandas:
     def __init__(self, *args, **kwargs):
         self.columns = ['Test Result', 'Station', 'Log Name', 'Script Version',
                         'MAC', 'Start Time', 'Total Time', 'Station ID',
-                        'Dut ID', 'Fail Reason', 'Sub Reason']
+                        'Dut ID', 'Main Issue', 'Sub Issue', 'Fail Reason']
 
     def toDataframd(self, *args):
         return pd.DataFrame(args[0], columns=self.columns)

@@ -76,8 +76,9 @@ def progressBar(cunt):
                     f.close()
                     parsing = func(analizyFun, content, logPath, anaDir, station, log)
                     '''callback function: logParse()
-                       result list: [result, station, log name, script version, mac,
-                                    start_time, total_time, station id, dut id, fail_reason]'''
+                       result list: [result, station, log name, script version,
+                                     mac, start_time, total_time, station id,
+                                     dut id, main issue, sub issue, fail_reason]'''
                     bar.update()
             return parsing
         return progress
@@ -96,9 +97,51 @@ def main():
             print (x)
     pd_ = cutepandas()
     data = pd_.toDataframd(result)
-    group1 = data.groupby('Fail Reason')
-    print (group1.size())
 
+    logfail = data.loc[data['Main Issue'] != 'NONE']
+    count = logfail['Main Issue'].count()
+    print (count)
+
+    mainissue = logfail.groupby('Main Issue')
+    print (mainissue.size())
+
+    for name in mainissue.size().index:
+        print ('{} - count:{}, rate:{:0.1f}%'.format(name,
+                                                     mainissue.size().loc[name],
+                                                     (mainissue.size().loc[name] / count) * 100))
+        subname = logfail.loc[logfail['Main Issue'] == name,
+                              ['Log Name', 'Sub Issue']]
+        count_ = subname['Sub Issue'].count()
+        subissue = subname.groupby('Sub Issue')
+        for name_ in subissue.size().index:
+            print ('---{} -- count:{}, rate:{:0.1f}%'.format(name_,
+                                                             subissue.size().loc[name_],
+                                                             (subissue.size().loc[name_] / count_) * 100))
+            failreason = logfail.loc[logfail['Sub Issue'] == name_,
+                                     ['Log Name', 'Fail Reason']]
+            detail = failreason.groupby('Fail Reason')
+            for name__ in detail.size().index:
+                logname = failreason.loc[failreason['Fail Reason'] == name__,
+                                                   ['Log Name']].values
+                print ('------{} -- count:{}\n{}'.format(name__,
+                                                         detail.size().loc[name__],
+                                                         logname))
+    '''
+    subissue = data.loc[data['Main Issue'] == 'Online issue',
+                        ['Log Name', 'Sub Issue']]
+    print (subissue)
+    subissue_ = subissue.groupby('Sub Issue')
+    print (subissue_.size())
+
+
+    failreason = data.loc[data['Sub Issue'] == 'SNMP Issue',
+                          ['Log Name', 'Sub Issue', 'Fail Reason']]
+    print (failreason)
+    failreason_ = failreason.groupby('Fail Reason')
+    print (failreason_.size())
+
+    #print (subissue_.describe(include='all'))
+    '''
 
 
 if __name__ == '__main__':
