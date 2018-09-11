@@ -8,7 +8,7 @@ from tkinter import ttk
 from functools import wraps
 from controller import analizyFun
 from controller import cutepandas
-from model import dirFunc
+# from model import dirFunc
 
 '''Author: Y.J. Wang @2018.09.01
 Descrtiption:
@@ -63,11 +63,11 @@ def progressBar(cunt):
         @wraps(func)
         def progress(analizyFun):
             bar = barStatus(analizyFun.fileCollect())
-            anaDir = dirFunc().createAnalizydir(list(analizyFun.fileDic.keys()))[1]
+            anaDir = analizyFun.createAnalizydir(list(analizyFun.fileDic.keys()))[1]
             # andDir format: (mainpath, [subfolder], [file])
             for station in analizyFun.fileDic:
                 for log in analizyFun.fileDic[station]:
-                    if dirFunc().walkDir(analizyFun.rawpath)[1]:
+                    if analizyFun.walkDir(analizyFun.rawpath)[1]:
                         logPath = analizyFun.rawpath + '\\' + station + '\\' + log
                     else:
                         logPath = analizyFun.rawpath + '\\' + log
@@ -91,13 +91,23 @@ def startAnalizy(*args):
 
 
 def main():
-    result = startAnalizy(analizyFun())
-    for x in result:
-        if not x[0]:
-            print (x)
+    pd = cutepandas()
+    result = startAnalizy(pd)
+    for i in result:
+        if not i[0]:
+            print (i)
+    pd.calacPercentage()
+    #print (data)
+
+    # result = startAnalizy(analizyFun())
+    # pd = cutepandas()
+    # data = pd.calacPercentage()
+    # print (data)
+
+
+    '''
     pd_ = cutepandas()
     data = pd_.toDataframd(result)
-
     logfail = data.loc[data['Main Issue'] != 'NONE']
     count = logfail['Main Issue'].count()
     print (count)
@@ -126,6 +136,8 @@ def main():
                 print ('------{} -- count:{}\n{}'.format(name__,
                                                          detail.size().loc[name__],
                                                          logname))
+    '''
+
     '''
     subissue = data.loc[data['Main Issue'] == 'Online issue',
                         ['Log Name', 'Sub Issue']]

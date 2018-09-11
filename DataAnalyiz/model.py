@@ -11,44 +11,46 @@ define folder/file and database control module'''
 # Class for subfolder collect method and new folder creation
 class dirFunc:
     def __init__(self, *args):
-        pass
+        self.folder = str()
+        self.dirList = list()
+        self.rootpath = str()
 
     # open the open file gui (tkinter)
     # return (True/None, folder path)
     def openRawdir(self):
         from tkinter.filedialog import askdirectory
-        folder = askdirectory()
-        if folder:
-            return(1, folder)
+        self.folder = askdirectory()
+        if self.folder:
+            return(1, self.folder)
         else:
             return(0, 'no select dir')
 
     # consume the folder/file in the foler pathlib
     # return tuple: (folder path, [subfolder name], [file])
     def walkDir(self, dirPath):
-        dirList = next(os.walk(dirPath))
-        return dirList
+        self.dirList = next(os.walk(dirPath))
+        return self.dirList
 
     # create the analizy folder
     # the folder path is $analizyDir/sub-folder/[Pass/Fail]
     # return tuple(True/None, /$analizyDir)
     def createAnalizydir(self, dirList):
-        rootpath = os.getcwd() + '\\' + 'analizyDir'
+        self.rootpath = os.getcwd() + '\\' + 'analizyDir'
         # delete the analizyDir folder
-        shutil.rmtree(rootpath, ignore_errors=True)
+        shutil.rmtree(self.rootpath, ignore_errors=True)
         # create the analizyDir folder
-        pathlib.Path(rootpath).mkdir(exist_ok=True)
+        pathlib.Path(self.rootpath).mkdir(exist_ok=True)
         for dir in dirList:
-            subpath = rootpath + '\\' + dir
+            subpath = self.rootpath + '\\' + dir
             pathlib.Path(subpath).mkdir(exist_ok=True)
             for subdir in ['Pass', 'Fail']:
                 subdirpath = subpath + '\\' + subdir
                 pathlib.Path(subdirpath).mkdir(exist_ok=True)
         try:
-            if next(os.walk(rootpath))[1] == dirList:
-                return (1, next(os.walk(rootpath)))
+            if next(os.walk(self.rootpath))[1] == dirList:
+                return (1, next(os.walk(self.rootpath)))
             else:
-                return (0, '{} creat failed'.format(rootpath))
+                return (0, '{} creat failed'.format(self.rootpath))
         except Exception:
             return (0, 'err')
 

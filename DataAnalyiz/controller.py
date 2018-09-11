@@ -12,14 +12,17 @@ from shutil import copyfile
 Descrtiption:
 file analizy module'''
 
+
+# parseResult = list()
 # Class for the file analizy
-class analizyFun:
+class analizyFun(dirFunc):
     def __init__(self, *args):
+        super(analizyFun, self).__init__(self)
         self.fileFolder = list()
         self.parseResult = list()
         self.fileDic = dict()
         self.fileCunt = int()
-        self.rawpath = dirFunc().openRawdir()[1]
+        self.rawpath = self.openRawdir()[1]
         # classify the fail issue
         self.issue = {'MES issue': ['check mes', 'get sn'],
                       'US Cal. issue': ['freq:', 'freq='],
@@ -37,7 +40,7 @@ class analizyFun:
                                         'D3.0_US_SNR': ['scqam snr']}],
                       'Booting issue': ['booting port'],
                       'LED issue': [' led '],
-                      'I2C issue': ['device id'],
+                      'I2C issue': ['device id','us atten offset'],
                       'USB issue': ['usb mount', 'mount', 'usb content'],
                       'Script issue': ['traceback']}
         self.subissue = {}
@@ -54,7 +57,7 @@ class analizyFun:
     # consume the number of files
     def fileCollect(self):
         fileCunt = int()
-        dirList = dirFunc().walkDir(self.rawpath)
+        dirList = self.walkDir(self.rawpath)
         # dirList format: (folder path, [subfolder], [file])
         if dirList[1]:
             for dir in dirList[1]:
@@ -125,6 +128,8 @@ class analizyFun:
             else:
                 copyfile('{}'.format(args[2]),
                          '{}/{}/Pass/{}'.format(args[3][0], args[4], args[5]))
+            # global parseResult
+            # parseResult.append(result)
             args[0].parseResult.append(result)
             return args[0].parseResult
         return walk_read
@@ -173,14 +178,73 @@ class analizyFun:
         return logResult
 
 
-class cutepandas:
-    def __init__(self, *args, **kwargs):
+class cutepandas(analizyFun):
+    def __init__(self, *args):
+        super(cutepandas, self).__init__(self)
+        #dirFunc.__init__(self)
+        #analizyFun.__init__(self)
         self.columns = ['Test Result', 'Station', 'Log Name', 'Script Version',
                         'MAC', 'Start Time', 'Total Time', 'Station ID',
                         'Dut ID', 'Main Issue', 'Sub Issue', 'Fail Reason']
+        self.condiction = ['Main Issue', 'Sub Issue', 'Fail Reason']
+        self.returns = dict()
 
+    def dataframeTocsv(func):
+        wraps(func)
+        def tocsv(self, *args):
+            data = func(self, args[0])
+            from pandas import ExcelWriter
+            writer = ExcelWriter(self.rootpath + '\\analizy.xlsx')
+            data[0].to_excel(writer, 'All')
+            data[1].to_excel(writer, 'fail')
+            writer.save()
+            # data[0].to_csv(os.getcwd() + '\\analizy.csv', index = False, sep = ',', encoding = 'utf-8')
+            return data[1]
+        return tocsv
+
+    @dataframeTocsv
     def toDataframd(self, *args):
-        return pd.DataFrame(args[0], columns=self.columns)
+        dataframe = pd.DataFrame(args[0], columns=self.columns)
+        dataframe_fail = dataframe.loc[dataframe['Main Issue'] != 'NONE']
+        return (dataframe, dataframe_fail)
+
+    def dataMining(func):
+        @wraps(func)
+        def getData(*args):
+            # global parseResult
+            faildata = args[0].toDataframd(args[0].parseResult)
+            return func(args[0], args[0].condiction, faildata)
+        return getData
+
+    @dataMining
+    def calacPercentage(self, *args):
+        issue = args[1].groupby('Main Issue')
+        failsums = args[1]['Main Issue'].count()
+        for name in issue.size().index:
+            count = issue.size().loc[name]
+            rate = (issue.size().loc[name] / failsums) * 100
+            self.returns.update({name: [count, rate]})
+            print ('\n\n{} - count:{}, rate:{:0.1f}%'.format(name, count, rate))
+            subname = args[1].loc[args[1]['Main Issue'] == name,
+                                  ['Log Name', 'Sub Issue']]
+            subfailsums = subname['Sub Issue'].count()
+            subissue = subname.groupby('Sub Issue')
+            for subname in subissue.size().index:
+                subcount = subissue.size().loc[subname]
+                rate = (subissue.size().loc[subname] / subfailsums) * 100
+                self.returns.update({subname: [subcount, rate]})
+                print ('---{} -- count:{}, rate:{:0.1f}%'.format(subname, subcount, rate))
+                failreason = args[1].loc[args[1]['Sub Issue'] == subname,
+                                         ['Log Name', 'Fail Reason']]
+                detail = failreason.groupby('Fail Reason')
+                for failname in detail.size().index:
+                    faillogconut = detail.size().loc[failname]
+                    logname = failreason.loc[failreason['Fail Reason'] == failname,
+                                                       ['Log Name']].values
+                    print ('------{} -- count:{}\n{}'.format(failname, faillogconut, logname))
+        return self.returns
+
+
 
 
 def main():
